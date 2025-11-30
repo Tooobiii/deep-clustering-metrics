@@ -10,8 +10,8 @@ from clustpy.deep import DEC, DCN, IDEC, DKM
 from clustpy.data.preprocessing import z_normalization
 from clustpy.deep.neural_networks import FeedforwardAutoencoder
 from clustpy.metrics import unsupervised_clustering_accuracy
-from pymfe.mfe import MFE
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
+from extract_features import Extractor
 
 def build_autoencoder(input_dim, embedding_dim, hidden_layers, activations=torch.nn.LeakyReLU):
     ae_layers = [input_dim] + hidden_layers + [embedding_dim]
@@ -20,7 +20,7 @@ def build_autoencoder(input_dim, embedding_dim, hidden_layers, activations=torch
         "activation_fn": activations,
     })
 
-EXCEL_PATH = "results.xlsx"
+EXCEL_PATH = "results/results.xlsx"
 
 # General args
 DATASETS = {
@@ -143,17 +143,8 @@ NMI = normalized_mutual_info_score(labels, pseudo_labels)
 ARI = adjusted_rand_score(labels, pseudo_labels)
 
 # Extract features
-if len(data) <= 20000:
-    mfe = MFE(groups=["clustering"])
-else:
-    mfe = MFE(groups=["clustering"], features=["ch", "int", "nre", "sil", "vdb", "vdu"])
-
-mfe.fit(embeddings, pseudo_labels)
-
-features, values = mfe.extract()
-
-feature_dict = dict(zip(features, values))
-
+extractor = Extractor(embeddings, pseudo_labels)
+feature_dict = extractor.extract_all()
 
 # Build results
 row = {
