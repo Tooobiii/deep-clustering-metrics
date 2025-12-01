@@ -1,6 +1,6 @@
 import numpy as np
 from pycvi import cvi_func as cv
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import pairwise_distances, silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 class Extractor:
     def __init__(self, embeddings, pseudo_labels):
@@ -11,10 +11,10 @@ class Extractor:
         return cv.dunn(self.embeddings, self.pseudo_labels)
 
     def davies_bouldin_index(self):
-        return cv.davies_bouldin(self.embeddings, self.pseudo_labels)
+        return davies_bouldin_score(self.embeddings, self.pseudo_labels)
 
     def calinski_harabasz_index(self):
-        return cv.CH(self.embeddings, self.pseudo_labels)
+        return calinski_harabasz_score(self.embeddings, self.pseudo_labels)
 
     def intra_cluster_distance(self):
         distances = pairwise_distances(self.embeddings)
@@ -32,12 +32,12 @@ class Extractor:
         return np.mean(distances[np.triu_indices_from(distances, k=1)])
 
     def silhouette_score(self):
-        return cv.silhouette(self.embeddings, self.pseudo_labels)
+        return silhouette_score(self.embeddings, self.pseudo_labels)
 
     def extract_all(self):
         return {
             "dunn": self.dunn(),
-            "davies_bouldin": self.davies_bouldin_index(),
+        #    "davies_bouldin": self.davies_bouldin_index(),
             "calinski_harabasz": self.calinski_harabasz_index(),
             "inter_cluster_distance": self.inter_cluster_distance(),
             "intra_cluster_distance": self.intra_cluster_distance(),

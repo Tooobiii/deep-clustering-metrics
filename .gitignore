@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 subset_indices/
 .idea/
-*.xlsx
+*.csv

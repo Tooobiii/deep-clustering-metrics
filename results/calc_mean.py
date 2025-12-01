@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_excel("results_sorted.xlsx")
+df = pd.read_csv("results_sorted.csv")
 
 group_cols = ["dataset", "size", "model", "architecture"]
 
@@ -22,4 +22,4 @@ for col in metric_cols:
 
 df_mean = df_mean[new_cols]
 
-df_mean.to_excel("results_mean.xlsx", index=False)
+df_mean.to_csv("results_mean.csv", index=False)
