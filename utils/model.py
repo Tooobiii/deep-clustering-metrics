@@ -19,7 +19,7 @@ def initialize_model(args, data, n_clusters):
         if v.default is not inspect.Parameter.empty
     }
 
-    embedding_size = args.embedding_size if args.embedding_size is not None else DEFAULTS["embedding_size"]
+    embedding_size = args.embedding_size
     pretrain_epochs = args.pretrain_epochs if args.pretrain_epochs is not None else DEFAULTS["pretrain_epochs"]
     clustering_epochs = args.clustering_epochs if args.clustering_epochs is not None else DEFAULTS["clustering_epochs"]
     architecture = build_autoencoder(input_dim=data.shape[1], embedding_dim=embedding_size,

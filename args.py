@@ -11,7 +11,7 @@ def parse_arguments():
 
     parser.add_argument("-m", "--model", type=str, required=True, choices=["DEC", "IDEC", "DCN", "DKM"])
     parser.add_argument("-hl", "--hidden_layers", type=int, nargs="+", default=[500, 500, 2000])
-    parser.add_argument("-e", "--embedding_size", type=int, default=None)
+    parser.add_argument("-e", "--embedding_size", type=int, default=10)
     parser.add_argument("-p", "--pretrain_epochs", type=int, default=None)
     parser.add_argument("-c", "--clustering_epochs", type=int, default=None)
 

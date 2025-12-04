@@ -3,7 +3,7 @@ import torch
 import random
 from clustpy.metrics import unsupervised_clustering_accuracy
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
-from extract_features import Extractor
+from utils.extract_metrics import Extractor
 from args import parse_arguments
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
@@ -42,7 +42,7 @@ NMI = normalized_mutual_info_score(labels, pseudo_labels)
 ARI = adjusted_rand_score(labels, pseudo_labels)
 
 # Extract features
-feature_dict = Extractor(embeddings, pseudo_labels).extract_all()
+feature_dict = Extractor(embeddings, pseudo_labels, n_clusters).extract_all()
 
 # Build results
 row = {
@@ -53,8 +53,8 @@ row = {
     "architecture": extract_architecture(model),
     "n_clusters": n_clusters,
     "embedding_size": args.embedding_size,
-    "pretrain_epochs": args.pretrain_epochs,
-    "clustering_epochs": args.clustering_epochs,
+    "pretrain_epochs": model.pretrain_epochs,
+    "clustering_epochs": model.clustering_epochs,
     "UCA": UCA,
     "NMI": NMI,
     "ARI": ARI
