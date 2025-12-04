@@ -17,11 +17,14 @@ class Extractor:
         return calinski_harabasz_score(self.embeddings, self.pseudo_labels)
 
     def intra_cluster_distance(self):
-        distances = pairwise_distances(self.embeddings)
-        return np.mean([
-            np.mean(distances[self.pseudo_labels == c][:, self.pseudo_labels == c])
-            for c in np.unique(self.pseudo_labels)
-        ])
+        try:
+            distances = pairwise_distances(self.embeddings)
+            return np.mean([
+                np.mean(distances[self.pseudo_labels == c][:, self.pseudo_labels == c])
+                for c in np.unique(self.pseudo_labels)
+            ])
+        except MemoryError:
+            return None
 
     def inter_cluster_distance(self):
         centroids = np.vstack([
@@ -37,7 +40,7 @@ class Extractor:
     def extract_all(self):
         return {
             "dunn": self.dunn(),
-        #    "davies_bouldin": self.davies_bouldin_index(),
+            "davies_bouldin": self.davies_bouldin_index(),
             "calinski_harabasz": self.calinski_harabasz_index(),
             "inter_cluster_distance": self.inter_cluster_distance(),
             "intra_cluster_distance": self.intra_cluster_distance(),
