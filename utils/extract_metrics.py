@@ -1,4 +1,5 @@
 import numpy as np
+from permetrics import ClusteringMetric
 from pycvi import cvi_func as cv
 from sklearn.metrics import pairwise_distances, silhouette_score, calinski_harabasz_score, davies_bouldin_score
 from pymfe.mfe import MFE
@@ -7,95 +8,115 @@ import time
 
 
 class Extractor:
-    def __init__(self, embeddings, pseudo_labels, n_clusters):
-        self.embeddings = embeddings
+    def __init__(self, embedding, pseudo_labels, n_clusters):
+        self.embedding = embedding
         self.pseudo_labels = pseudo_labels
         self.n_clusters = n_clusters
         self.unique_labels = np.unique(pseudo_labels)
-        self.now = time.time()
-        #self.dist_matrix = pairwise_distances(self.embeddings)
-        #self.centroids = self.compute_centroids()
+        self.centroids = self.compute_centroids()
+        self.evaluator = ClusteringMetric()
 
-### HELPING FUNCTIONS ###
+        self.now = time.time()
+
+
     def compute_centroids(self):
         return np.vstack([
-            self.embeddings[self.pseudo_labels == c].mean(axis=0)
+            self.embedding[self.pseudo_labels == c].mean(axis=0)
             for c in self.unique_labels
             ])
 
 
-### COHESION METRICS (DISTANCE WITHIN A CLUSTER) ###
-    def intra_cluster_distance(self):
-        print("intra started after:", time.time() - self.now)
-        distances = pairwise_distances(self.embeddings)
-        return np.mean([
-            np.mean(distances[self.pseudo_labels == c][:, self.pseudo_labels == c])
-            for c in self.unique_labels
-        ])
+### DISTANCE-BASED METRICS ###
+    def dunn(self):
+        print("Dunn index started after:", time.time() - self.now)
+        return self.evaluator.dunn_index(self.embedding, self.pseudo_labels, use_modified=False)
+
+    def intercluster_separation_index(self):
+        print("Intercluster separation index started after:", time.time() - self.now)
+        mfe = MFE(groups=["clustering"], features=["int"])
+        mfe.fit(self.embedding, self.pseudo_labels)
+        _, values = mfe.extract()
+        return values[0]
 
     def silhouette_score(self):
-        print("silhouette_score started after:", time.time() - self.now)
-        return silhouette_score(self.embeddings, self.pseudo_labels)
+        print("Silhouette score started after:", time.time() - self.now)
+        return silhouette_score(self.embedding, self.pseudo_labels)
 
 
-### SEPARATION METRICS (DISTANCE BETWEEN CLUSTERS) ###
-    def inter_cluster_distance(self):
-        print("inter started after:", time.time() - self.now)
-        centroids = self.compute_centroids()
-        distances = pairwise_distances(centroids)
-        return np.mean(distances[np.triu_indices_from(distances, k=1)])
+### DISPERSION BASED METRICS (COMBINE COHESION AND SEPARATION)
+    def ball_hall_index(self):
+        print("Ball Hall index started after:", time.time() - self.now)
+        return self.evaluator.ball_hall_index(self.embedding, self.pseudo_labels)
 
-    def dunn(self):
-        print("dunn started after:", time.time() - self.now)
-        mfe = MFE(groups=["clustering"], features=["vdu"])
-        mfe.fit(self.embeddings, self.pseudo_labels)
-        _, values = mfe.extract()
-        return values[0]
-
-    def intercluster_seperation_index(self):
-        print("intercluster_seperation_index started after:", time.time() - self.now)
-        mfe = MFE(groups=["clustering"], features=["int"])
-        mfe.fit(self.embeddings, self.pseudo_labels)
-        _, values = mfe.extract()
-        return values[0]
-
-
-### DISPERSION METRICS (COMBINE COHESION AND SEPARATION)
     def calinski_harabasz_index(self):
-        print("calinski_harabasz_index started after:", time.time() - self.now)
-        return calinski_harabasz_score(self.embeddings, self.pseudo_labels)
+        print("Calinski-Harabasz index started after:", time.time() - self.now)
+        return calinski_harabasz_score(self.embedding, self.pseudo_labels)
 
     def davies_bouldin_index(self):
-        print("davies_bouldin_index started after:", time.time() - self.now)
-        return davies_bouldin_score(self.embeddings, self.pseudo_labels)
+        print("Davies-Bouldin index started after:", time.time() - self.now)
+        return davies_bouldin_score(self.embedding, self.pseudo_labels)
+
+    def hartigan_index(self):
+        print("Hartigan index started after:", time.time() - self.now)
+        return self.evaluator.hartigan_index(self.embedding, self.pseudo_labels)
+
+    def pbm_index(self):
+        print("PBM index started after:", time.time() - self.now)
+        center = self.embedding.mean(axis=0)
+        e1 = np.sum(np.linalg.norm(self.embedding - center, axis=1))
+        ek = sum(
+            np.sum(np.linalg.norm(self.embedding[self.pseudo_labels == i] - self.centroids[i], axis=1))
+            for i in range(self.n_clusters))
+        dk = np.max(pairwise_distances(self.centroids))
+        return ((e1 / ek) * dk) ** 2 if ek > 0 else np.nan
 
     def score_function(self):
-        print("score_function started after:", time.time() - self.now)
-        return cv.score_function(self.embeddings, transform_multilabel(self.pseudo_labels))
+        print("ScoreFunction started after:", time.time() - self.now)
+        return cv.score_function(self.embedding, transform_multilabel(self.pseudo_labels))
 
+    def sdbw_index(self):
+        print("S_Dbw index started after:", time.time() - self.now)
+        scat = np.mean([
+            np.linalg.norm(self.embedding[self.pseudo_labels == i] - self.centroids[i])
+            for i in range(self.n_clusters)
+        ])
+        density = 0.0
+        for i in range(self.n_clusters):
+            for j in range(i + 1, self.n_clusters):
+                mid = self.centroids[i] + self.centroids[j] / 2
+                density += np.sum(np.linalg.norm(self.embedding - mid, axis=1) < scat)
+        return scat + density
+
+    def xie_beni_index(self):
+        print("Xie-Beni index started after:", time.time() - self.now)
+        return self.evaluator.xie_beni_index(self.embedding, self.pseudo_labels)
 
 ### INFORMATION-BASED METRICS
     def normalized_relative_entropy(self):
-        print("normalized_relative_entropy started after:", time.time() - self.now)
+        print("Normalized relative entropy started after:", time.time() - self.now)
         mfe = MFE(groups=["clustering"], features=["nre"])
-        mfe.fit(self.embeddings, self.pseudo_labels)
+        mfe.fit(self.embedding, self.pseudo_labels)
         _, values = mfe.extract()
         return values[0]
 
     def extract_all(self):
         result = {
-            "intra_cluster_distance": self.intra_cluster_distance(),
-            "dunn": self.dunn(),
-            "davies_bouldin": self.davies_bouldin_index(),
-            "calinski_harabasz": self.calinski_harabasz_index(),
-            "inter_cluster_distance": self.inter_cluster_distance(),
-            "silhouette_score": self.silhouette_score(),
-            "score_function": self.score_function(),
-            "intercluster_seperation_index": self.intercluster_seperation_index(),
-            "normalized_relative_entropy": self.normalized_relative_entropy()
+            "Dunn_Index": self.dunn(),
+            "Intercluster_Separation_Index": self.intercluster_separation_index(),
+            "Silhouette_Score": self.silhouette_score(),
+
+            "Ball-Hall_Index": self.ball_hall_index(),
+            "Calinski_Harabasz_Index": self.calinski_harabasz_index(),
+            "Davies-Bouldin_Index": self.davies_bouldin_index(),
+            "Hartigan_Index": self.hartigan_index(),
+            "Normalized relative entropy": self.normalized_relative_entropy(),
+            "PBM-Index": self.pbm_index(),
+            "Score_Function": self.score_function(),
+            "S_Dbw": self.sdbw_index(),
+            "Xie-Beni_Index": self.xie_beni_index()
         }
 
-        print("all done after:", time.time() - self.now)
+        print("All done after:", time.time() - self.now)
 
         return result
 
