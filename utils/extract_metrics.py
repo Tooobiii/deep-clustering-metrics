@@ -8,11 +8,11 @@ import time
 
 
 class Extractor:
-    def __init__(self, embedding, pseudo_labels, n_clusters):
+    def __init__(self, embedding, pseudo_labels):
         self.X = embedding
         self.y = pseudo_labels
-        self.K = n_clusters
-        self.unique_labels = np.unique(pseudo_labels)
+        self.K = len(np.unique(self.y))
+        self.labels = np.unique(pseudo_labels)
         self.n, self.p = self.X.shape
 
         self.centroids = self._centroids()
@@ -26,88 +26,171 @@ class Extractor:
 
 
     def _centroids(self):
+        """
+        Compute cluster centroids
+
+        :return:
+        centroids : array of shape (K, p)
+            Centroid c_k of each cluster k, defined as the mean of all points
+            assigned to that cluster.
+        """
         return np.vstack([
             self.X[self.y == c].mean(axis=0)
-            for c in self.unique_labels
+            for c in self.labels
             ])
 
     def _cluster_sizes(self):
+        """
+        Compute cluster sizes
+        :return:
+        cluster_sizes : array of shape (K,)
+            Number of points n_k assigned to each cluster k.
+        """
         return np.array([
             np.sum(self.y == c)
-            for c in self.unique_labels
+            for c in self.labels
         ])
 
     def _precompute_distances(self):
-        """Save frequently used distances"""
-        # x_i - c_k
+        """
+        Precompute frequently used distances
+
+        Computes and stores:
+        - Distances of points assigned to their assigned cluster centroids
+        - Pairwise distances between all cluster centroids
+
+        within_centroid_dist : dict[int, array]
+            For each cluster index k, an array of shape (n_k,) containing
+            distances ||x_i -c_k|| for all points i assigned to cluster k.
+
+        between_centroid_dist : array of shape (K, K)
+            Matrix of centroid distances ||c_k - c_k'||.
+        """
         self.within_centroid_dist = {
-            c : self._dist(self.X[self.y == c], ck)
-            for c, ck in zip(self.unique_labels, self.centroids)
+            k : self._dist(self.X[self.y == label], self.centroids[k])
+            for k, label in enumerate(self.labels)
         }
 
-        # ||c_k - c_k'||
         self.between_centroid_dist = pairwise_distances(self.centroids)
         np.fill_diagonal(self.between_centroid_dist, np.inf) # Avoid zeros on the diagonal
 
 
     def _dist(self, a, b):
-        """Calculate Euclidean distance"""
-        # ||a - b||^2
+        """
+        Compute Euclidean distances between multiple vectors and a single vector.
+
+        :parameter
+        a : array of shape (m, p)
+            Matrix containing m vectors in p-dimensional space.
+        b : array of shape (p,)
+            Reference vector.
+
+        :return
+        distances : array of shape (m,)
+            Euclidean distances ||a_i - b|| for i = 1, ..., m
+        """
         return np.linalg.norm(a - b, axis=1)
 
     def cluster_variances(self):
         """
-        Calculate variance for each cluster
-        Returns array of shape (K,)
+        Compute within-cluster variances.
+
+        :return
+        variances : array of shape (K,)
+            Cluster variances, defined as
+            (1 / n_k) * \sum ||x_i - c_k||^2
         """
-        # (1 / n_k) * \sum ||x_i - ck||^2
         return np.array([
             np.sum(self.within_centroid_dist[c] ** 2) / nk
-            for c, nk in zip(self.unique_labels, self.cluster_sizes)
+            for c, nk in zip(self.labels, self.cluster_sizes)
         ])
 
     def min_centroid_distance(self):
-        """Shortest distance between centroids"""
+        """
+        Compute the minimum distance between distinct centroids.
+
+        :return
+        distance : float
+            Minimum centroid-to-centroid distance
+            min ||c_k - c_k'||
+        """
         return np.min(self.between_centroid_dist)
 
     def max_centroid_distance(self):
-        """Highest distance between centroids"""
+        """
+        Compute the maximum distance between centroids.
+
+        :return
+        distance : float
+            Maximum centroid-to-centroid distance
+            max ||c_k - c_k'||
+        """
         return np.max(self.between_centroid_dist)
 
     def mean_centroid_distance(self):
-        """Average distance between centroids"""
+        """
+        Compute the mean distance between distinct centroids.
+
+        :return
+        distance : float
+            Mean centroid-to-centroid distance
+        """
         return np.mean(self.between_centroid_dist[np.isfinite(self.between_centroid_dist)])
 
     def cluster_radii(self):
         """
-        Average distance between cluster points and centroid
-        Return array of shape (K,)
+        Compute cluster raddii.
+
+        :return
+        radii : array of shape (K,)
+            Mean distance of points in each cluster to their centroid
+            (1 / n_k) * \sum ||x_i - c_k||
         """
-        # (1 / n_k) * \sum ||x_i - c_k||
         return np.array([
             np.mean(self.within_centroid_dist[c])
-            for c in self.unique_labels
+            for c in self.labels
         ])
 
     def max_cluster_radius(self):
-        """Highest cluster radius"""
+        """
+        Compute the maximum cluster radius
+
+        :return
+        radius : float
+            Maximum cluster radius max((1 / n_k) * \sum ||x_i - c_k||)
+        """
         return np.max(self.cluster_radii())
 
     def tss(self):
-        """Calculate total sum of squares"""
-        # \sum ||x_i-b||^2
+        """
+        Compute total sum of squares
+
+        :return
+        tss : float
+            TSS = \sum ||x_i - b||^2
+        """
         return np.sum(self._dist(self.X, self.barycenter) ** 2)
 
     def wss(self):
-        """Calculate within-group sum of squares"""
-        # \sum \sum ||x_i - c_k||^2
+        """
+        Compute within-group sum of squares
+
+        :return
+        wss : float
+            WSS = \sum \sum ||x_i - c_k||^2
+        """
         return sum(np.sum(d ** 2)
         for d in self.within_centroid_dist.values()
         )
 
     def bss(self):
-        """Calculate between-group sum of squares"""
-        # \sum \sum n_k * ||c_k - b||^2
+        """
+        Compute between-group sum of squares
+
+        :return
+        bss : float
+            BSS = \sum ||c_k - b||^2
+        """
         return sum(nk * np.linalg.norm(ck - self.barycenter) ** 2
         for nk, ck in zip(self.cluster_sizes, self.centroids)
     )
