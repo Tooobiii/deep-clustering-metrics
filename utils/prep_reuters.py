@@ -14,7 +14,7 @@ def main():
     # Load data
     data, labels = load_reuters(return_X_y=True)
 
-    # Keep cluster ratio from original
+    # Keep original cluster ratio
     stratify_labels = labels if args.stratify else None
 
     subset_idx, _ = train_test_split(

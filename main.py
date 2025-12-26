@@ -42,7 +42,7 @@ NMI = normalized_mutual_info_score(labels, pseudo_labels)
 ARI = adjusted_rand_score(labels, pseudo_labels)
 
 # Extract features
-feature_dict = Extractor(embeddings, pseudo_labels, n_clusters).extract_all()
+feature_dict = Extractor(embeddings, pseudo_labels).extract_all()
 
 # Build results
 row = {
