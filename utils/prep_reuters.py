@@ -1,4 +1,5 @@
 import argparse
+
 import numpy as np
 from clustpy.data import load_reuters
 from sklearn.model_selection import train_test_split

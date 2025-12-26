@@ -1,8 +1,11 @@
-import pytest
 import numpy as np
+import pytest
+
 from create_embeddings import symmetric_embedding, asymmetric_embedding
 from expected import EXPECTED_SYMMETRIC, EXPECTED_ASYMMETRIC
 from utils.extract_metrics import Extractor
+
+
 
 @pytest.mark.parametrize(
     "metric_symmetric, expected_symmetric",

@@ -1,6 +1,8 @@
 import inspect
+
 import torch
 from clustpy.deep.neural_networks import FeedforwardAutoencoder
+
 from config import MODELS
 
 def build_autoencoder(input_dim, embedding_dim, hidden_layers, activations=torch.nn.LeakyReLU):

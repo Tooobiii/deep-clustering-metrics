@@ -1,5 +1,6 @@
-import pandas as pd
 import os
+
+import pandas as pd
 
 def save_results(row, output):
     if not os.path.exists(output):

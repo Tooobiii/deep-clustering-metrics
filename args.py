@@ -1,4 +1,5 @@
 import argparse
+
 import numpy as np
 
 def parse_arguments():

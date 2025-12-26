@@ -1,13 +1,16 @@
+import random
+
 import numpy as np
 import torch
-import random
+
 from clustpy.metrics import unsupervised_clustering_accuracy
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
-from utils.extract_metrics import Extractor
+
 from args import parse_arguments
+from results.save_results import save_results
+from utils.extract_metrics import Extractor
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
-from results.save_results import save_results
 
 # Parse Arguments
 args = parse_arguments()
