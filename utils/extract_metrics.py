@@ -25,23 +25,49 @@ def timed(label=None):
         return wrapper
     return decorator
 
-class Extractor:
+class Metrics:
     def __init__(self, embedding, pseudo_labels):
         self.X = embedding
         self.y = pseudo_labels
         self.K = len(np.unique(self.y))
         self.labels = np.unique(pseudo_labels)
         self.n, self.p = self.X.shape
+        self.cluster_sizes = self._cluster_sizes()
+
+    def _cluster_sizes(self):
+        """
+        Compute cluster sizes
+        :return:
+        cluster_sizes : ndarray of shape (K,)
+            Number of points n_k assigned to each cluster k.
+        """
+        return np.array([
+            np.sum(self.y == c)
+            for c in self.labels
+        ])
+
+    def extract_all(self):
+        results = {}
+
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if callable(attr) and getattr(attr, "_is_metric", False):
+                results[attr._metric_name] = attr()
+
+        return results
+
+
+class Dispersion(Metrics):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
 
         self.centroids = self._centroids()
         self.barycenter = self.X.mean(axis=0)
-        self.cluster_sizes = self._cluster_sizes()
 
         self._precompute_distances()
 
-        self.evaluator = ClusteringMetric()
 
-
+### HELPING FUNCTIONS ###
     def _centroids(self):
         """
         Compute cluster centroids
@@ -55,18 +81,6 @@ class Extractor:
             self.X[self.y == c].mean(axis=0)
             for c in self.labels
             ])
-
-    def _cluster_sizes(self):
-        """
-        Compute cluster sizes
-        :return:
-        cluster_sizes : ndarray of shape (K,)
-            Number of points n_k assigned to each cluster k.
-        """
-        return np.array([
-            np.sum(self.y == c)
-            for c in self.labels
-        ])
 
     def _precompute_distances(self):
         """
@@ -268,28 +282,7 @@ class Extractor:
         )
 
 
-
-### DISTANCE-BASED METRICS ###
-    @metric("Dunn")
-    @timed("Dunn")
-    def dunn(self):
-        return self.evaluator.dunn_index(self.X, self.y, use_modified=False)
-
-    @metric("Intercluster Separation")
-    @timed("Intercluster Separation")
-    def intercluster_separation(self):
-        mfe = MFE(groups=["clustering"], features=["int"])
-        mfe.fit(self.X, self.y)
-        _, values = mfe.extract()
-        return values[0]
-
-    @metric("Silhouette")
-    @timed("Silhouette")
-    def silhouette(self):
-        return silhouette_score(self.X, self.y)
-
-
-### DISPERSION BASED METRICS ###
+### METRICS ###
     @metric("Ball-Hall")
     @timed("Ball-Hall")
     def ball_hall(self):
@@ -565,7 +558,7 @@ class Extractor:
         return num / den
 
 
-### INFORMATION-BASED METRICS
+### INFORMATION-BASED METRICS ### TODO move
     @metric("Normalized relative entropy")
     @timed("Normalized relative entropy")
     def normalized_relative_entropy(self):
@@ -575,16 +568,77 @@ class Extractor:
         return values[0]
 
 
-### EXTRACTION
-    def extract_all(self):
-        results = {}
 
-        for attr_name in dir(self):
-            attr = getattr(self, attr_name)
-            if callable(attr) and getattr(attr, "_is_metric", False):
-                results[attr._metric_name] = attr()
+class Distance(Metrics):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
 
-        return results
+        self.D = pairwise_distances(self.X)
+        self._iu = np.triu_indices(self.n, k=1)
+        self.distances = self.D[self._iu]
+
+        self._precompute() # TODO Only compute when needed?
+
+        self.evaluator = ClusteringMetric()
+
+
+### HELPING FUNCTIONS ###
+    def _precompute(self):
+        self._same_cluster = (
+            self.y[self._iu[0]] == self.y[self._iu[1]]
+        )
+        self._different_cluster = ~self._same_cluster
+
+        self.nT = self.n * (self.n - 1) // 2
+        self.nW = np.sum(self._same_cluster)
+        self.nB = np.sum(self._different_cluster)
+        self.SW = np.sum(self.distances[self._same_cluster])
+        self.SB = np.sum(self.distances[self._different_cluster])
+
+        self._sorted_distances = np.sort(self.distances)
+        self._sd_distances = np.std(self.distances, ddof=0)
+
+    def within_distances(self):
+        return self.distances[self._same_cluster]
+
+    def between_distances(self):
+        return self.distances[self._different_cluster]
+
+    def s_min(self):
+        return np.sum(self._sorted_distances[: self.nW])
+
+    def s_max(self):
+        return np.sum(self._sorted_distances[-self.nW :])
+
+    def sd(self):
+        return self._sd_distances
+
+    def n_plus(self):
+        diff = self.between_distances()[:, None] - self.within_distances()[None, :]
+        return np.sum(diff > 0)
+
+    def n_minus(self):
+        diff = self.between_distances()[:, None] - self.within_distances()[None, :]
+        return np.sum(diff < 0)
+
+### METRICS ###
+    @metric("Dunn")
+    @timed("Dunn")
+    def dunn(self):
+        return self.evaluator.dunn_index(self.X, self.y, use_modified=False)
+
+    @metric("Intercluster Separation")
+    @timed("Intercluster Separation")
+    def intercluster_separation(self):
+        mfe = MFE(groups=["clustering"], features=["int"])
+        mfe.fit(self.X, self.y)
+        _, values = mfe.extract()
+        return values[0]
+
+    @metric("Silhouette")
+    @timed("Silhouette")
+    def silhouette(self):
+        return silhouette_score(self.X, self.y)
 
 
 def transform_multilabel(labels):

@@ -8,7 +8,7 @@ from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 from args import parse_arguments
 from results.save_results import save_results
-from utils.extract_metrics import Extractor
+from utils.extract_metrics import Dispersion
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
 
@@ -45,7 +45,7 @@ NMI = normalized_mutual_info_score(labels, pseudo_labels)
 ARI = adjusted_rand_score(labels, pseudo_labels)
 
 # Extract features
-feature_dict = Extractor(embeddings, pseudo_labels).extract_all()
+feature_dict = Dispersion(embeddings, pseudo_labels).extract_all()
 
 # Build results
 row = {
