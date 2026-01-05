@@ -622,23 +622,53 @@ class Distance(Metrics):
         return np.sum(diff < 0)
 
 ### METRICS ###
+    def c_index(self):
+        return (self.SW - self.s_min()) / (self.s_max() - self.s_min())
+
     @metric("Dunn")
     @timed("Dunn")
     def dunn(self):
         return self.evaluator.dunn_index(self.X, self.y, use_modified=False)
 
-    @metric("Intercluster Separation")
-    @timed("Intercluster Separation")
-    def intercluster_separation(self):
-        mfe = MFE(groups=["clustering"], features=["int"])
-        mfe.fit(self.X, self.y)
-        _, values = mfe.extract()
-        return values[0]
+    @metric("Gamma")
+    @timed("Gamma")
+    def gamma(self):
+        n_plus, n_minus = self.n_plus(), self.n_minus()
+        return (n_plus - n_minus) / (n_plus + n_minus)
+
+    @metric("G-minus")
+    @timed("G-minus")
+    def g_minus(self):
+        return 1.0 - (2 * self.n_plus()) / (self.nT * (self.nT - 1))
+
+    @metric("G-plus")
+    @timed("G-plus")
+    def g_plus(self):
+        return (2 * self.n_minus()) / (self.nT * (self.nT - 1))
+
+    @metric("McClain-Rao")
+    @timed("McClain-Rao")
+    def mcclain_rao(self):
+        return (self.SW / self.nW) / (self.SB / self.nB)
+
+    def point_biserial(self):
+        num = (
+                (self.SB / self.nB - self.SW / self.nW)
+            * np.sqrt((self.nB * self.nW) / self.nT)
+        )
+        return num / self.sd()
 
     @metric("Silhouette")
     @timed("Silhouette")
     def silhouette(self):
         return silhouette_score(self.X, self.y)
+
+    @metric("Tau")
+    @timed("Tau")
+    def tau(self):
+        den = np.sqrt((self.nB * self.nW) * (self.nT * (self.nT - 1) / 2))
+        return (self.n_plus() - self.n_minus()) / den
+
 
 
 def transform_multilabel(labels):
