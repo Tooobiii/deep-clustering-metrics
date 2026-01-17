@@ -7,8 +7,9 @@ from clustpy.metrics import unsupervised_clustering_accuracy
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 from args import parse_arguments
+from config import dataset_policy
 from results.save_results import save_results
-from utils.extract_metrics import Dispersion, Density, Distance, Statistical, Complexity, Information
+from utils.extract_metrics import Separation, Density, Distance, Statistical, Complexity, Information
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
 
@@ -46,15 +47,32 @@ def main():
     NMI = normalized_mutual_info_score(labels, pseudo_labels)
     ARI = adjusted_rand_score(labels, pseudo_labels)
 
-    # Extract features
-    dispersion_dict = Dispersion(embeddings, pseudo_labels).extract_all()
-    density_dict = Density(embeddings, pseudo_labels).extract_all()
-    distance_dict = Distance(embeddings, pseudo_labels).extract_all()
-    information_dict = Information(embeddings, pseudo_labels).extract_all()
-    statistical_dict = Statistical(embeddings, pseudo_labels).extract()
-    complexity_dict = Complexity(embeddings, pseudo_labels).extract()
+    # Policy for extraction
+    policy = dataset_policy(args.dataset, len(data))
 
-    feature_dict = {**dispersion_dict, **distance_dict, **statistical_dict, **complexity_dict}
+    # Extract features
+    separation_dict = Separation(embeddings, pseudo_labels).extract_all()
+
+    density_dict = (
+        Density(embeddings, pseudo_labels).extract_all() if policy["dbcv"]
+        else Density(embeddings, pseudo_labels).extract_all(exclude={"dbcv"})
+    )
+
+    distance_dict = (
+        Distance(embeddings, pseudo_labels).extract_all() if policy["distance"]
+        else {}
+    )
+
+    information_dict = Information(embeddings, pseudo_labels).extract_all()
+
+    statistical_dict = Statistical(embeddings, pseudo_labels).extract()
+
+    complexity_dict = (
+        Complexity(embeddings, pseudo_labels).extract() if policy["complexity"]
+        else {}
+    )
+
+    feature_dict = {**separation_dict, **density_dict, **distance_dict, **information_dict, **statistical_dict, **complexity_dict}
 
     # Build results
     row = {

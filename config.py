@@ -16,6 +16,8 @@ DATASETS = {
     "pendigits": load_pendigits # other
 }
 
+TEXT_DATASETS = {"reuters", "newsgroups"}
+
 # Model args
 MODELS = {
     "DEC": DEC, # just for testing
@@ -23,3 +25,16 @@ MODELS = {
     "DCN": DCN,
     "DKM": DKM,
 }
+
+def dataset_policy(dataset, n):
+    is_text = dataset in TEXT_DATASETS
+
+    compute_distance = n < 20.000
+    compute_complexity = compute_distance
+    compute_dbcv = (not is_text) and (n < 20000)
+
+    return {
+        "distance": compute_distance,
+        "complexity": compute_complexity,
+        "dbcv": compute_dbcv,
+    }

@@ -125,10 +125,13 @@ class Metrics:
         """
         return np.max(self.between_centroid_dist[np.isfinite(self.between_centroid_dist)])
 
-    def extract_all(self):
+    def extract_all(self, exclude=None):
+        exclude = set(exclude or [])
         results = {}
 
         for attr_name in dir(self):
+            if attr_name in exclude:
+                continue
             attr = getattr(self, attr_name)
             if callable(attr) and getattr(attr, "_is_metric", False):
                 results[attr._metric_name] = attr()
@@ -136,7 +139,7 @@ class Metrics:
         return results
 
 
-class Dispersion(Metrics):
+class Separation(Metrics):
     def __init__(self, embedding, pseudo_labels):
         super().__init__(embedding, pseudo_labels)
 
@@ -274,14 +277,6 @@ class Dispersion(Metrics):
             vals.append(max_num / min_den)
 
         return np.mean(vals)
-
-    """
-    @metric("Density-Based Clustering Validation")
-    @timed("Density-Based Clustering Validation")
-    def dbcv(self):
-        import dbcv
-        return dbcv.dbcv(self.X, self.y)
-    """
 
     @metric("Fukuyuma-Sugeno")
     @timed("Fukuyuma-Sugeno")
@@ -535,6 +530,12 @@ class Density(Metrics):
         )
 
     ### METRICS ###
+    @metric("Density-Based Clustering Validation")
+    @timed("Density-Based Clustering Validation")
+    def dbcv(self):
+        import dbcv
+        return dbcv.dbcv(self.X, self.y)
+
     @metric("S_Dbw")
     @timed("S_Dbw")
     def sdbw(self):
