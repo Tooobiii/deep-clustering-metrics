@@ -74,7 +74,6 @@ class Metrics:
             for c in self.labels
             ])
 
-
     def _dist(self, a, b):
         """
         Compute Euclidean distances between multiple vectors and a single vector.

@@ -1,6 +1,9 @@
 venv/
+testenv/
 __pycache__/
 *.pyc
 subset_indices/
 .idea/
 *.csv
+build/
+*.egg-info/

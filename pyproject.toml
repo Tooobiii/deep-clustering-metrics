@@ -11,16 +11,18 @@ authors = [
     { name="Tooobiii", email="TBA" }
 ]
 dependencies = [
-    "torch @ https://download.pytorch.org/whl/cu128/",
-    "numpy",
     "clustpy",
-    "pymfe",
-    "pandas",
-    "torchvision",
+    "dbcv @ git+https://github.com/FelSiq/DBCV.git",
     "nltk",
+    "numpy",
+    "opencv-python",
+    "pandas",
+    "permetrics",
+    "pymfe",
+    "requests",
     "scikit-learn",
-    "openpyxl",
-    "requests"
+    "torch",
+    "torchvision"
 ]
 
 [tool.setuptools.packages.find]
