@@ -35,6 +35,7 @@ class Metrics:
         self.centroids = self._centroids()
         self.cluster_sizes = self._cluster_sizes()
         self.barycenter = self.X.mean(axis=0)
+        self._precompute_distances()
 
     def _precompute_distances(self):
         """
