@@ -3,7 +3,7 @@ from functools import wraps
 
 import numpy as np
 from permetrics import ClusteringMetric # Dunn
-from pymfe.mfe import MFE   # Inter-cluster separation
+from pymfe.mfe import MFE
 from sklearn.metrics import pairwise_distances, silhouette_score
 
 def metric(name=None):
@@ -30,57 +30,11 @@ class Metrics:
         self.X = embedding
         self.y = pseudo_labels
         self.K = len(np.unique(self.y))
-        self.labels = np.unique(pseudo_labels)
+        self.labels = np.unique(self.y)
         self.n, self.p = self.X.shape
-        self.cluster_sizes = self._cluster_sizes()
-
-    def _cluster_sizes(self):
-        """
-        Compute cluster sizes
-        :return:
-        cluster_sizes : ndarray of shape (K,)
-            Number of points n_k assigned to each cluster k.
-        """
-        return np.array([
-            np.sum(self.y == c)
-            for c in self.labels
-        ])
-
-    def extract_all(self):
-        results = {}
-
-        for attr_name in dir(self):
-            attr = getattr(self, attr_name)
-            if callable(attr) and getattr(attr, "_is_metric", False):
-                results[attr._metric_name] = attr()
-
-        return results
-
-
-class Dispersion(Metrics):
-    def __init__(self, embedding, pseudo_labels):
-        super().__init__(embedding, pseudo_labels)
-
         self.centroids = self._centroids()
+        self.cluster_sizes = self._cluster_sizes()
         self.barycenter = self.X.mean(axis=0)
-
-        self._precompute_distances()
-
-
-### HELPING FUNCTIONS ###
-    def _centroids(self):
-        """
-        Compute cluster centroids
-
-        :return:
-        centroids : ndarray of shape (K, p)
-            Centroid c_k of each cluster k, defined as the mean of all points
-            assigned to that cluster.
-        """
-        return np.vstack([
-            self.X[self.y == c].mean(axis=0)
-            for c in self.labels
-            ])
 
     def _precompute_distances(self):
         """
@@ -105,6 +59,20 @@ class Dispersion(Metrics):
         self.between_centroid_dist = pairwise_distances(self.centroids)
         np.fill_diagonal(self.between_centroid_dist, np.inf) # Avoid zeros on the diagonal
 
+    def _centroids(self):
+        """
+        Compute cluster centroids
+
+        :return:
+        centroids : ndarray of shape (K, p)
+            Centroid c_k of each cluster k, defined as the mean of all points
+            assigned to that cluster.
+        """
+        return np.vstack([
+            self.X[self.y == c].mean(axis=0)
+            for c in self.labels
+            ])
+
 
     def _dist(self, a, b):
         """
@@ -122,18 +90,16 @@ class Dispersion(Metrics):
         """
         return np.linalg.norm(a - b, axis=1)
 
-    def cluster_variances(self):
+    def _cluster_sizes(self):
         """
-        Compute within-cluster variances.
-
-        :return
-        variances : ndarray of shape (K,)
-            Cluster variances, defined as
-            (1 / n_k) * \\sum ||x_i - c_k||^2
+        Compute cluster sizes
+        :return:
+        cluster_sizes : ndarray of shape (K,)
+            Number of points n_k assigned to each cluster k.
         """
         return np.array([
-            np.sum(self.within_centroid_dist[c] ** 2) / nk
-            for c, nk in zip(self.labels, self.cluster_sizes)
+            np.sum(self.y == c)
+            for c in self.labels
         ])
 
     def min_centroid_distance(self):
@@ -157,6 +123,36 @@ class Dispersion(Metrics):
             max ||c_k - c_k'||
         """
         return np.max(self.between_centroid_dist[np.isfinite(self.between_centroid_dist)])
+
+    def extract_all(self):
+        results = {}
+
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if callable(attr) and getattr(attr, "_is_metric", False):
+                results[attr._metric_name] = attr()
+
+        return results
+
+
+class Dispersion(Metrics):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
+
+    ### HELPING FUNCTIONS ###
+    def cluster_variances(self):
+        """
+        Compute within-cluster variances.
+
+        :return
+        variances : ndarray of shape (K,)
+            Cluster variances, defined as
+            (1 / n_k) * \\sum ||x_i - c_k||^2
+        """
+        return np.array([
+            np.sum(self.within_centroid_dist[c] ** 2) / nk
+            for c, nk in zip(self.labels, self.cluster_sizes)
+        ])
 
     def mean_centroid_distance(self):
         """
@@ -226,63 +222,7 @@ class Dispersion(Metrics):
         for nk, ck in zip(self.cluster_sizes, self.centroids)
     )
 
-    def dis(self):
-        dists = self.between_centroid_dist[np.isfinite(self.between_centroid_dist)]
-        ratio = np.max(dists) / np.min(dists)
-
-        inv_sum = 0.0
-        for k in range(self.K):
-            inv_sum += 1.0 / sum(
-                self.between_centroid_dist[k, kp]
-                for kp in range(self.K) if kp != k
-            )
-
-        return ratio * inv_sum
-
-    def dis_star(self):
-        sigma = np.sqrt(
-            np.mean([
-                np.sum(self.within_centroid_dist[k] ** 2) / self.cluster_sizes[k]
-                for k in range(self.K)
-            ])
-        )
-
-        nck = []
-        for k in range(self.K):
-            nck.append(np.sum(
-                self._dist(self.X, self.centroids[k]) <= sigma)
-            )
-
-        dis = 0.0
-        for k in range(self.K):
-            for kp in range(self.K):
-                if k != kp:
-                    mid = 0.5 * (self.centroids[k] + self.centroids[kp])
-                    n_mid = np.sum(self._dist(self.X, mid) <= sigma)
-                    dis += n_mid / max(nck[k], nck[kp])
-
-        dis /= (self.K * (self.K - 1))
-
-        return dis
-
-
-    def scat(self):
-        num = np.mean([
-            np.sum(self.within_centroid_dist[k] ** 2 / self.cluster_sizes[k])
-            for k in range(self.K)
-        ])
-        den = np.sum(self._dist(self.X, self.barycenter) ** 2) / self.n
-        return num / den
-
-    def scat_star(self):
-        return max(np.sum(
-            self.within_centroid_dist[k] ** 2 / self.cluster_sizes[k]) /
-                   (np.sum(self._dist(self.X, self.barycenter) ** 2) / self.n)
-            for k in range(self.K)
-        )
-
-
-### METRICS ###
+    ### METRICS ###
     @metric("Ball-Hall")
     @timed("Ball-Hall")
     def ball_hall(self):
@@ -333,6 +273,14 @@ class Dispersion(Metrics):
             vals.append(max_num / min_den)
 
         return np.mean(vals)
+
+    """
+    @metric("Density-Based Clustering Validation")
+    @timed("Density-Based Clustering Validation")
+    def dbcv(self):
+        import dbcv
+        return dbcv.dbcv(self.X, self.y)
+    """
 
     @metric("Fukuyuma-Sugeno")
     @timed("Fukuyuma-Sugeno")
@@ -411,8 +359,8 @@ class Dispersion(Metrics):
     def r_squared(self):
         return self.bss() / self.tss()
 
-    @metric("Score Function validation")
-    @timed("Score Function validation")
+    @metric("Score Function")
+    @timed("Score Function")
     def score_function(self):
         term1 = sum(
             nk * np.linalg.norm(ck - self.centroids.mean(axis=0))
@@ -426,20 +374,10 @@ class Dispersion(Metrics):
 
         return 1.0 - (np.exp(np.exp((1 / (self.n * self.K)) * (term1 - term2)))) ** -1
 
-    @metric("S_Dbw")
-    @timed("S_Dbw")
-    def sdbw(self):
-        return self.scat() + self.dis_star()
-
-    @metric("SD1")
-    @timed("SD1")
-    def sd1(self):
-        return self.scat() + self.dis()
-
-    @metric("SD2")
-    @timed("SD2")
-    def sd2(self):
-        return self.scat_star() + self.dis()
+    @metric("Scatter Ratio")
+    @timed("Scatter Ratio")
+    def scatter_ratio(self):
+        return self.bss() / self.wss()
 
     @metric("Tang")
     @timed("Tang")
@@ -457,30 +395,6 @@ class Dispersion(Metrics):
     @timed("Trace_W")
     def trace_w(self):
         return self.wss()
-
-    @metric("Vsv1")
-    @timed("Vsv1")
-    def vsv1(self):
-        vu = np.mean([np.sum(
-            self.within_centroid_dist[k]) / self.cluster_sizes[k]
-                      for k in range(self.K)
-                      ])
-
-        vo = self.K / self.min_centroid_distance()
-
-        return vu + vo
-
-    @metric("Vsv2")
-    @timed("Vsv2")
-    def vsv2(self):
-        vu_star = max(np.sum(
-            self.within_centroid_dist[k]) / self.cluster_sizes[k]
-                      for k in range(self.K)
-        )
-
-        vo = self.K / self.min_centroid_distance()
-
-        return vu_star + vo
 
     @metric("WCH")
     @timed("WCH")
@@ -558,18 +472,110 @@ class Dispersion(Metrics):
         return num / den
 
 
-### INFORMATION-BASED METRICS ### TODO move
-    @metric("Normalized relative entropy")
-    @timed("Normalized relative entropy")
-    def normalized_relative_entropy(self):
-        mfe = MFE(groups=["clustering"], features=["nre"])
-        mfe.fit(self.X, self.y)
-        _, values = mfe.extract()
-        return values[0]
+class Density(Metrics):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
 
+    ### HELPING FUNCTIONS ###
+    def dis(self):
+        dists = self.between_centroid_dist[np.isfinite(self.between_centroid_dist)]
+        ratio = np.max(dists) / np.min(dists)
+
+        inv_sum = 0.0
+        for k in range(self.K):
+            inv_sum += 1.0 / sum(
+                self.between_centroid_dist[k, kp]
+                for kp in range(self.K) if kp != k
+            )
+
+        return ratio * inv_sum
+
+    def dis_star(self):
+        sigma = np.sqrt(
+            np.mean([
+                np.sum(self.within_centroid_dist[k] ** 2) / self.cluster_sizes[k]
+                for k in range(self.K)
+            ])
+        )
+
+        nck = []
+        for k in range(self.K):
+            nck.append(np.sum(
+                self._dist(self.X, self.centroids[k]) <= sigma)
+            )
+
+        dis = 0.0
+        for k in range(self.K):
+            for kp in range(self.K):
+                if k != kp:
+                    mid = 0.5 * (self.centroids[k] + self.centroids[kp])
+                    n_mid = np.sum(self._dist(self.X, mid) <= sigma)
+                    dis += n_mid / max(nck[k], nck[kp])
+
+        dis /= (self.K * (self.K - 1))
+
+        return dis
+
+    def scat(self):
+        num = np.mean([
+            np.sum(self.within_centroid_dist[k] ** 2 / self.cluster_sizes[k])
+            for k in range(self.K)
+        ])
+
+        den = np.sum(self._dist(self.X, self.barycenter) ** 2) / self.n
+
+        return num / den
+
+    def scat_star(self):
+        return max(np.sum(
+            self.within_centroid_dist[k] ** 2 / self.cluster_sizes[k]) /
+                   (np.sum(self._dist(self.X, self.barycenter) ** 2) / self.n)
+            for k in range(self.K)
+        )
+
+    ### METRICS ###
+    @metric("S_Dbw")
+    @timed("S_Dbw")
+    def sdbw(self):
+        return self.scat() + self.dis_star()
+
+    @metric("SD1")
+    @timed("SD1")
+    def sd1(self):
+        return self.scat() + self.dis()
+
+    @metric("SD2")
+    @timed("SD2")
+    def sd2(self):
+        return self.scat_star() + self.dis()
+
+    @metric("Vsv1")
+    @timed("Vsv1")
+    def vsv1(self):
+        vu = np.mean([np.sum(
+            self.within_centroid_dist[k]) / self.cluster_sizes[k]
+                      for k in range(self.K)
+                      ])
+
+        vo = self.K / self.min_centroid_distance()
+
+        return vu + vo
+
+    @metric("Vsv2")
+    @timed("Vsv2")
+    def vsv2(self):
+        vu_star = max(np.sum(
+            self.within_centroid_dist[k]) / self.cluster_sizes[k]
+                      for k in range(self.K)
+        )
+
+        vo = self.K / self.min_centroid_distance()
+
+        return vu_star + vo
 
 
 class Distance(Metrics):
+    @timed("Precomputing distances")
     def __init__(self, embedding, pseudo_labels):
         super().__init__(embedding, pseudo_labels)
 
@@ -581,8 +587,7 @@ class Distance(Metrics):
 
         self.evaluator = ClusteringMetric()
 
-
-### HELPING FUNCTIONS ###
+    ### HELPING FUNCTIONS ###
     def _precompute(self):
         self._same_cluster = (
             self.y[self._iu[0]] == self.y[self._iu[1]]
@@ -621,7 +626,9 @@ class Distance(Metrics):
         diff = self.between_distances()[:, None] - self.within_distances()[None, :]
         return np.sum(diff < 0)
 
-### METRICS ###
+    ### METRICS ###
+    @metric("C Index")
+    @timed("C Index")
     def c_index(self):
         return (self.SW - self.s_min()) / (self.s_max() - self.s_min())
 
@@ -630,6 +637,7 @@ class Distance(Metrics):
     def dunn(self):
         return self.evaluator.dunn_index(self.X, self.y, use_modified=False)
 
+    """
     @metric("Gamma")
     @timed("Gamma")
     def gamma(self):
@@ -645,31 +653,71 @@ class Distance(Metrics):
     @timed("G-plus")
     def g_plus(self):
         return (2 * self.n_minus()) / (self.nT * (self.nT - 1))
+    """
 
     @metric("McClain-Rao")
     @timed("McClain-Rao")
     def mcclain_rao(self):
         return (self.SW / self.nW) / (self.SB / self.nB)
 
+    @metric("Point Biserial")
+    @timed("Point Biserial")
     def point_biserial(self):
-        num = (
-                (self.SB / self.nB - self.SW / self.nW)
-            * np.sqrt((self.nB * self.nW) / self.nT)
-        )
-        return num / self.sd()
+        meanB = np.float64(self.SB) / np.float64(self.nB)
+        meanW = np.float64(self.SW) / np.float64(self.nW)
+        scale = np.sqrt((np.float64(self.nB) * np.float64(self.nW)) / np.float64(self.nT))
+        return (meanB - meanW) * scale / np.float64(self.sd())
 
     @metric("Silhouette")
     @timed("Silhouette")
     def silhouette(self):
         return silhouette_score(self.X, self.y)
 
+    """
     @metric("Tau")
     @timed("Tau")
     def tau(self):
         den = np.sqrt((self.nB * self.nW) * (self.nT * (self.nT - 1) / 2))
         return (self.n_plus() - self.n_minus()) / den
+    """
 
 
+class Information(Metrics):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
 
-def transform_multilabel(labels):
-    return [[int(label)] for label in labels]
+    ### METRICS ###
+    @metric("Cluster entropy")
+    @timed("Cluster entropy")
+    def cluster_entropy(self):
+        p = self.cluster_sizes / self.n
+        return -np.sum(p * np.log(p + 1e-6))
+
+    @metric("Normalized relative entropy")
+    @timed("Normalized relative entropy")
+    def normalized_relative_entropy(self):
+        mfe = MFE(groups=["clustering"], features=["nre"])
+        mfe.fit(self.X, self.y)
+        _, values = mfe.extract()
+        return values[0]
+
+
+class MetaFeatures:
+    def __init__(self, embedding, pseudo_labels, mfe):
+        self.embedding = embedding
+        self.pseudo_labels = pseudo_labels
+        self.mfe = mfe
+
+    @timed("Extracting")
+    def extract(self):
+        self.mfe.fit(self.embedding, self.pseudo_labels)
+        features, values = self.mfe.extract()
+        return dict(zip(features, values))
+
+class Statistical(MetaFeatures):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels, MFE(groups=["info-theory", "statistical"]))
+
+class Complexity(MetaFeatures):
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels, MFE(groups=["complexity"]))

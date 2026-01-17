@@ -40,7 +40,7 @@ def initialize_model(args, data, n_clusters):
                        clustering_loss_weight=clustering_loss,
                        pretrain_optimizer_params=pretrain_optimizer,
                        clustering_optimizer_params=clustering_optimizer,
-                       device="cuda"
+                       device="cuda" if torch.cuda.is_available() else "cpu"
                        )
     return model
 
