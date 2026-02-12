@@ -4,12 +4,12 @@ import numpy as np
 import torch
 
 from clustpy.metrics import unsupervised_clustering_accuracy
+from datetime import datetime
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 from args import parse_arguments
-from config import dataset_policy
 from results.save_results import save_results
-from utils.extract_metrics import Separation, Density, Distance, Statistical, Complexity, Information
+from utils.extract_metrics import Separation, Density, Distance, Statistical, Complexity, Information, Symmetry
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
 
@@ -17,6 +17,9 @@ from utils.model import initialize_model, extract_architecture
 def main():
     # Parse Arguments
     args = parse_arguments()
+
+    # Define unique run name
+    run_name = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{random.randint(1000,9999)}"
 
     # Seeding
     random.seed(args.seed)
@@ -47,35 +50,30 @@ def main():
     NMI = normalized_mutual_info_score(labels, pseudo_labels)
     ARI = adjusted_rand_score(labels, pseudo_labels)
 
-    # Policy for extraction
-    policy = dataset_policy(args.dataset, len(data))
-
     # Extract features
     separation_dict = Separation(embeddings, pseudo_labels).extract_all()
 
-    density_dict = (
-        Density(embeddings, pseudo_labels).extract_all() if policy["dbcv"]
-        else Density(embeddings, pseudo_labels).extract_all(exclude={"dbcv"})
-    )
+    density_dict = Density(embeddings, pseudo_labels).extract_all()
 
-    distance_dict = (
-        Distance(embeddings, pseudo_labels).extract_all() if policy["distance"]
-        else {}
-    )
+    distance_dict = Distance(embeddings, pseudo_labels).extract_all()
 
     information_dict = Information(embeddings, pseudo_labels).extract_all()
+
+    symmetry_dict = Symmetry(embeddings, pseudo_labels).extract_all()
 
     statistical_dict = Statistical(embeddings, pseudo_labels).extract()
 
     complexity_dict = (
-        Complexity(embeddings, pseudo_labels).extract() if policy["complexity"]
+        Complexity(embeddings, pseudo_labels).extract() if len(data) < 20000
         else {}
     )
 
-    feature_dict = {**separation_dict, **density_dict, **distance_dict, **information_dict, **statistical_dict, **complexity_dict}
+    feature_dict = {**separation_dict, **density_dict, **distance_dict, **information_dict,
+                    **symmetry_dict, **statistical_dict, **complexity_dict}
 
     # Build results
     row = {
+        "run_name": run_name,
         "dataset": args.dataset,
         "size": len(data),
         "seed": args.seed,
@@ -97,7 +95,7 @@ def main():
             row[feat] = float(val)
 
     # Save results
-    save_results(row, args.output)
+    save_results(row, embeddings, pseudo_labels, args.output)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,15 @@ import pandas as pd
 INFILE = "results.csv"
 OUTFILE = "results_prepped.csv"
 
-CALC_SD = True
+CALC_SD = False
+
+def drop_cols(df):
+    drop_cols = ["seed", "embedding_size", "clustering_epochs", "pretrain_epochs",
+                 "g_mean.mean", "h_mean.mean", "sd_ratio"]
+
+    drop_cols += [c for c in df.columns if c.endswith(".sd")]
+    df = df.drop(columns=drop_cols, errors="ignore")
+    return df
 
 def normalize_datasets(df):
     df.loc[(df["dataset"] == "reuters") & (df["size"] <= 10000), "dataset"] = "reuters10k"
@@ -38,8 +46,10 @@ def invert_metrics(df):
         "Vsv1",
         "Vsv2",
         "C Index",
-        "Normalized relative entropy",
+        "McClain-Rao",
         "Cluster entropy",
+        "Sym-Davies-Bouldin",
+        "Negentropy Increment",
     ]
 
     existing = [c for c in invert_metrics if c in df.columns]
@@ -56,10 +66,6 @@ def sort_results(df):
 
 def aggregate_results(df, calc_sd):
     group_cols = ["dataset", "model", "architecture", "size", "n_clusters"]
-    drop_cols = ["seed", "embedding_size", "clustering_epochs", "pretrain_epochs"]
-
-    drop_cols += [c for c in df.columns if c.endswith(".sd")]
-    df = df.drop(columns=drop_cols, errors="ignore")
 
     numeric_cols = df.select_dtypes(include="number").columns
     metric_cols = [c for c in numeric_cols if c not in group_cols]
@@ -84,14 +90,14 @@ def aggregate_results(df, calc_sd):
 def main():
     df = pd.read_csv(INFILE)
 
+    df = drop_cols(df)
     df = normalize_datasets(df)
     df = replace_architecture_labels(df)
     df = invert_metrics(df)
     df = sort_results(df)
 
-
-    df_mean = aggregate_results(df, CALC_SD)
-    df_mean.to_csv(OUTFILE, index=False)
+    df = aggregate_results(df, CALC_SD)
+    df.to_csv(OUTFILE, index=False)
 
 if __name__ == "__main__":
     main()

@@ -7,3 +7,5 @@ subset_indices/
 *.csv
 build/
 *.egg-info/
+results/*
+!results/*.py

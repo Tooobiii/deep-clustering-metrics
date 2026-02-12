@@ -5,6 +5,7 @@ import numpy as np
 from permetrics import ClusteringMetric # Dunn
 from pymfe.mfe import MFE
 from sklearn.metrics import pairwise_distances, silhouette_score
+from sklearn.neighbors import NearestNeighbors
 
 def metric(name=None):
     def decorator(func):
@@ -124,13 +125,10 @@ class Metrics:
         """
         return np.max(self.between_centroid_dist[np.isfinite(self.between_centroid_dist)])
 
-    def extract_all(self, exclude=None):
-        exclude = set(exclude or [])
+    def extract_all(self):
         results = {}
 
         for attr_name in dir(self):
-            if attr_name in exclude:
-                continue
             attr = getattr(self, attr_name)
             if callable(attr) and getattr(attr, "_is_metric", False):
                 results[attr._metric_name] = attr()
@@ -231,11 +229,6 @@ class Separation(Metrics):
     def ball_hall(self):
         return np.mean(self.cluster_variances())
 
-    @metric("Benfield-Raftery")
-    @timed("Benfield-Raftery")
-    def banfield_raftery(self):
-        return np.sum(self.cluster_sizes * np.log(self.cluster_variances()))
-
     @metric("Calinski-Harabasz")
     @timed("Calinski-Harabasz")
     def calinski_harabasz(self):
@@ -276,17 +269,6 @@ class Separation(Metrics):
             vals.append(max_num / min_den)
 
         return np.mean(vals)
-
-    @metric("Fukuyuma-Sugeno")
-    @timed("Fukuyuma-Sugeno")
-    def fukuyama_sugeno(self):
-        term1 = self.wss()
-        term2 = sum(
-            np.linalg.norm(ck - self.centroids.mean(axis=0)) ** 2
-            for ck in self.centroids
-        )
-
-        return term1 - term2
 
     @metric("Hartigan")
     @timed("Hartigan")
@@ -369,11 +351,6 @@ class Separation(Metrics):
 
         return 1.0 - (np.exp(np.exp((1 / (self.n * self.K)) * (term1 - term2)))) ** -1
 
-    @metric("Scatter Ratio")
-    @timed("Scatter Ratio")
-    def scatter_ratio(self):
-        return self.bss() / self.wss()
-
     @metric("Tang")
     @timed("Tang")
     def tang(self):
@@ -390,20 +367,6 @@ class Separation(Metrics):
     @timed("Trace_W")
     def trace_w(self):
         return self.wss()
-
-    @metric("WCH")
-    @timed("WCH")
-    def wch(self):
-        overlap = 0.0
-        variances = self.cluster_variances()
-
-        for k in range(self.K - 1):
-            for kp in range(k + 1, self.K):
-                if (self.between_centroid_dist[k, kp] ** 2
-                    < variances[k] + variances[kp]):
-                    overlap += 1
-
-        return self.calinski_harabasz() / (1 + overlap / self.n)
 
     @metric("Wemmert-Gancarski")
     @timed("Wemmert-Gancarski")
@@ -440,17 +403,6 @@ class Separation(Metrics):
             total += cluster_sum / self.cluster_sizes[k]
 
         return total / self.K
-
-    @metric("Xie-Beni starred")
-    @timed("Xie-Beni starred")
-    def xie_beni_star(self):
-        cluster_terms = [
-            np.sum(self.within_centroid_dist[k] ** 2) / self.cluster_sizes[k]
-            for k in range(self.K)
-        ]
-        num = max(cluster_terms)
-        den = self.min_centroid_distance() ** 2
-        return num / den
 
     @metric("Zalik SV")
     @timed("Zalik SV")
@@ -529,11 +481,10 @@ class Density(Metrics):
         )
 
     ### METRICS ###
-    @metric("Density-Based Clustering Validation")
-    @timed("Density-Based Clustering Validation")
+    @metric("DBCV")
+    @timed("DBCV")
     def dbcv(self):
-        import dbcv
-        return dbcv.dbcv(self.X, self.y)
+        return ClusteringMetric(X=self.X, y_pred=self.y).density_based_clustering_validation_index()
 
     @metric("S_Dbw")
     @timed("S_Dbw")
@@ -604,12 +555,6 @@ class Distance(Metrics):
         self._sorted_distances = np.sort(self.distances)
         self._sd_distances = np.std(self.distances, ddof=0)
 
-    def within_distances(self):
-        return self.distances[self._same_cluster]
-
-    def between_distances(self):
-        return self.distances[self._different_cluster]
-
     def s_min(self):
         return np.sum(self._sorted_distances[: self.nW])
 
@@ -618,14 +563,6 @@ class Distance(Metrics):
 
     def sd(self):
         return self._sd_distances
-
-    def n_plus(self):
-        diff = self.between_distances()[:, None] - self.within_distances()[None, :]
-        return np.sum(diff > 0)
-
-    def n_minus(self):
-        diff = self.between_distances()[:, None] - self.within_distances()[None, :]
-        return np.sum(diff < 0)
 
     ### METRICS ###
     @metric("C Index")
@@ -638,24 +575,6 @@ class Distance(Metrics):
     def dunn(self):
         return self.evaluator.dunn_index(self.X, self.y, use_modified=False)
 
-    """
-    @metric("Gamma")
-    @timed("Gamma")
-    def gamma(self):
-        n_plus, n_minus = self.n_plus(), self.n_minus()
-        return (n_plus - n_minus) / (n_plus + n_minus)
-
-    @metric("G-minus")
-    @timed("G-minus")
-    def g_minus(self):
-        return 1.0 - (2 * self.n_plus()) / (self.nT * (self.nT - 1))
-
-    @metric("G-plus")
-    @timed("G-plus")
-    def g_plus(self):
-        return (2 * self.n_minus()) / (self.nT * (self.nT - 1))
-    """
-
     @metric("McClain-Rao")
     @timed("McClain-Rao")
     def mcclain_rao(self):
@@ -666,7 +585,7 @@ class Distance(Metrics):
     def point_biserial(self):
         meanB = np.float64(self.SB) / np.float64(self.nB)
         meanW = np.float64(self.SW) / np.float64(self.nW)
-        scale = np.sqrt((np.float64(self.nB) * np.float64(self.nW)) / np.float64(self.nT))
+        scale = np.sqrt(np.float64(self.nB) * np.float64(self.nW)) / np.float64(self.nT)
         return (meanB - meanW) * scale / np.float64(self.sd())
 
     @metric("Silhouette")
@@ -674,18 +593,31 @@ class Distance(Metrics):
     def silhouette(self):
         return silhouette_score(self.X, self.y)
 
-    """
-    @metric("Tau")
-    @timed("Tau")
-    def tau(self):
-        den = np.sqrt((self.nB * self.nW) * (self.nT * (self.nT - 1) / 2))
-        return (self.n_plus() - self.n_minus()) / den
-    """
-
-
 class Information(Metrics):
     def __init__(self, embedding, pseudo_labels):
         super().__init__(embedding, pseudo_labels)
+        self._precompute_matrices()
+
+    ### HELPING FUNCTIONS
+    def _precompute_matrices(self):
+        Xc = self.X - self.barycenter
+        self._T = Xc.T @ Xc
+
+        WGk = []
+        WG = np.zeros((self.p, self.p), dtype=np.float64)
+        for k, label in enumerate(self.labels):
+            Xk = self.X[self.y == label]
+            ck = self.centroids[k]
+            Xk_c = Xk - ck
+            Sk = Xk_c.T @ Xk_c
+            WGk.append(Sk)
+            WG += Sk
+
+        self._WGk = WGk
+        self._WG = WG
+
+    def _logdet(self, A: np.ndarray) -> float:
+        return float(np.log(np.linalg.det(A)))
 
     ### METRICS ###
     @metric("Cluster entropy")
@@ -694,13 +626,149 @@ class Information(Metrics):
         p = self.cluster_sizes / self.n
         return -np.sum(p * np.log(p + 1e-6))
 
-    @metric("Normalized relative entropy")
-    @timed("Normalized relative entropy")
-    def normalized_relative_entropy(self):
-        mfe = MFE(groups=["clustering"], features=["nre"])
-        mfe.fit(self.X, self.y)
-        _, values = mfe.extract()
-        return values[0]
+    @metric("Log Determinant Ratio")
+    @timed("Log Determinant Ratio")
+    def log_determinant_ratio(self):
+        return float(self.n * (self._logdet(self._T) - self._logdet(self._WG)))
+
+    @metric("Negentropy Increment")
+    @timed("Negentropy Increment")
+    def negentropy_increment(self):
+        term_a = 0.0
+        for k, nk in enumerate(self.cluster_sizes):
+            cov_like = self._WGk[k] / float(nk - 1)
+            term_a += (nk / self.n) * self._logdet(cov_like)
+        term_a *= 0.5
+
+        term_b = -0.5 * self._logdet(self._T / float(self.n - 1))
+
+        p = self.cluster_sizes / self.n
+        p = p[p > 0]
+        term_c = -float(np.sum(p * np.log(p)))
+
+        return float(term_a + term_b + term_c)
+
+
+class Symmetry(Metrics):
+    @timed("Precomputing point-symmetry distances")
+    def __init__(self, embedding, pseudo_labels):
+        super().__init__(embedding, pseudo_labels)
+
+        self._dps_by_k = None
+        self._sum_dps_by_k = None
+        self._max_dps_by_k = None
+        self._total_dps = None
+
+        self._precompute_point_symmetry()
+
+        self._min_intercluster_dist = None
+
+    ### HELPING FUNCTIONS
+    def _precompute_point_symmetry(self):
+        dps_by_k = {}
+        sum_dps_by_k = np.zeros(self.K, dtype=np.float64)
+        max_dps_by_k = np.zeros(self.K, dtype=np.float64)
+
+        for k, label in enumerate(self.labels):
+            Xk = self.X[self.y == label]
+            nk = Xk.shape[0]
+
+            if nk < 2:
+                dps = np.full(nk, np.nan, dtype=np.float64)
+                dps_by_k[k] = dps
+                sum_dps_by_k[k] = np.nan
+                max_dps_by_k[k] = np.nan
+                continue
+
+            ck = self.centroids[k]
+            Xk_star = 2.0 * ck - Xk
+
+            nn = NearestNeighbors(n_neighbors=2, algorithm="auto")
+            nn.fit(Xk)
+            dists, _ = nn.kneighbors(Xk_star, return_distance=True)  # (nk, 2)
+
+            dsym = dists.mean(axis=1)  # Eq. (11)
+            r = self.within_centroid_dist[k].astype(np.float64)      # ||x_i - c_k||
+            dps = dsym * r                                           # Eq. (10)
+
+            dps_by_k[k] = dps
+            sum_dps_by_k[k] = np.sum(dps)
+            max_dps_by_k[k] = np.max(dps)
+
+        self._dps_by_k = dps_by_k
+        self._sum_dps_by_k = sum_dps_by_k
+        self._max_dps_by_k = max_dps_by_k
+
+        self._total_dps = np.nansum(sum_dps_by_k) if np.any(np.isnan(sum_dps_by_k)) else float(np.sum(sum_dps_by_k))
+
+    def _centroid_dist_matrix(self):
+        Dc = pairwise_distances(self.centroids)
+        np.fill_diagonal(Dc, np.inf)
+        return Dc
+
+    def _min_intercluster_distance(self):
+        """
+        min_{k!=k'} min_{s in I_k, t in I_k'} ||x_s - x_t||
+        O(n^2) time/memory (full pairwise distances).
+        """
+        if self._min_intercluster_dist is not None:
+            return self._min_intercluster_dist
+
+        D = pairwise_distances(self.X)
+        same = (self.y[:, None] == self.y[None, :])
+        D[same] = np.inf
+        np.fill_diagonal(D, np.inf)
+
+        self._min_intercluster_dist = float(np.min(D))
+        return self._min_intercluster_dist
+
+    ### METRICS
+    @metric("Sym")
+    @timed("Sym")
+    def sym(self):
+        Dc = self._centroid_dist_matrix()
+        max_centroid_dist = float(np.max(Dc[np.isfinite(Dc)]))
+
+        denom = self._total_dps
+        if denom == 0 or np.isnan(denom):
+            return np.nan
+
+        return (max_centroid_dist / denom) / float(self.K)
+
+    @metric("Sym-Davies-Bouldin")
+    @timed("Sym-Davies-Bouldin")
+    def sym_davies_bouldin(self):
+        Dc = self._centroid_dist_matrix()
+
+        # average within-cluster point-symmetry distance per cluster
+        avg_ps = np.empty(self.K, dtype=np.float64)
+        for k, label in enumerate(self.labels):
+            nk = np.sum(self.y == label)
+            if nk == 0:
+                avg_ps[k] = np.nan
+            else:
+                avg_ps[k] = self._sum_dps_by_k[k] / float(nk)
+
+        if np.any(np.isnan(avg_ps)):
+            return np.nan
+
+        # R_{k,k'} = (avg_ps[k] + avg_ps[k']) / ||c_k - c_k'||
+        # SymDB = (1/K) * sum_k max_{k'!=k} R_{k,k'}
+        R = (avg_ps[:, None] + avg_ps[None, :]) / Dc
+        np.fill_diagonal(R, -np.inf)
+
+        return float(np.mean(np.max(R, axis=1)))
+
+    @metric("Sym-Dunn")
+    @timed("Sym-Dunn")
+    def sym_dunn(self):
+        numerator = self._min_intercluster_distance()
+
+        denom = float(np.nanmax(self._max_dps_by_k))
+        if denom == 0 or np.isnan(denom):
+            return np.nan
+
+        return numerator / denom
 
 
 class MetaFeatures:

@@ -1,31 +1,20 @@
 import numpy as np
 import pytest
 
-from create_embeddings import symmetric_embedding, asymmetric_embedding
-from expected import EXPECTED_SYMMETRIC, EXPECTED_ASYMMETRIC
-from utils.extract_metrics import Dispersion
+from create_embeddings import symmetric_embedding
+from expected import EXPECTED
 
 
 
 @pytest.mark.parametrize(
-    "metric_symmetric, expected_symmetric",
-    EXPECTED_SYMMETRIC.items()
+    "metric_class, expected_dict",
+    EXPECTED
 )
 
-def test_symmetric(metric_symmetric, expected_symmetric):
+def test_metric(metric_class, expected_dict):
     embedding, label = symmetric_embedding()
-    dispersion = Dispersion(embedding, label)
-    value = getattr(dispersion, metric_symmetric)()
-    assert np.isclose(value, expected_symmetric, atol=1e-6)
+    metrics = metric_class(embedding, label)
 
-
-@pytest.mark.parametrize(
-    "metric_asymmetric, expected_asymmetric",
-    EXPECTED_ASYMMETRIC.items()
-)
-
-def test_asymmetric(metric_asymmetric, expected_asymmetric):
-    embedding, label = asymmetric_embedding()
-    dispersion = Dispersion(embedding, label)
-    value = getattr(dispersion, metric_asymmetric)()
-    assert np.isclose(value, expected_asymmetric, atol=1e-6)
+    for metric_name, expected_value in expected_dict.items():
+        value = getattr(metrics, metric_name)()
+        assert np.isclose(value, expected_value, atol=1e-6)
