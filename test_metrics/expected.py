@@ -34,14 +34,14 @@ EXPECTED = [
         "c_index": 0,
         "dunn": 3,
         "mcclain_rao": 2 * (np.sqrt(10) - 3),
-        "point_biserial": 0.997727, # TODO
+        "point_biserial": 0.997727,
         "silhouette":1 - (2 / (3 + np.sqrt(10))),
     }),
 
     (Information, {
-        "bic": np.log(2),
-        "icl": np.inf,
-        "shannon_entropy": -np.inf,
+        "shannon_entropy": np.log(2),
+        "bic": 19.930428,
+        "icl": 19.930428,
     }),
 
     (Symmetry, {

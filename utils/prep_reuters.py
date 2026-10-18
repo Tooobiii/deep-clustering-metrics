@@ -9,7 +9,7 @@ def main():
     parser.add_argument("--subset_size", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
     parser.add_argument("--stratify", action="store_true")
-    parser.add_argument("--output", type=str, default="../subset_incides/reuters_subset_indices.npy")
+    parser.add_argument("--output", type=str, default="subset_incides/reuters_subset_indices.npy")
     args = parser.parse_args()
 
     # Load data

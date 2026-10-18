@@ -8,17 +8,17 @@ from datetime import datetime
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 from args import parse_arguments
-from results.save_results import save_results
 from utils.extract_metrics import Separation, Density, Distance, Statistical, Complexity, Information, Symmetry
 from utils.load_data import load_normalized_data
 from utils.model import initialize_model, extract_architecture
+from utils.save_results import save_results
 
 
 def main():
     # Parse Arguments
     args = parse_arguments()
 
-    # Define unique run name
+    # Create unique run name
     run_name = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{random.randint(1000,9999)}"
 
     # Seeding
@@ -61,6 +61,7 @@ def main():
 
     symmetry_dict = Symmetry(embeddings, pseudo_labels).extract_all()
 
+    ### INFO: Statistical and Complexity meta-features were cut for the final thesis
     statistical_dict = Statistical(embeddings, pseudo_labels).extract()
 
     complexity_dict = (

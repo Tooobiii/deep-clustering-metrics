@@ -20,9 +20,11 @@ def save_results(row, embedding, labels, output):
         if col not in row:
             row[col] = None
 
+    # Save tabular results
     csv = pd.concat([csv, pd.DataFrame([row])], ignore_index=True)
     csv.to_csv(output, index=False)
 
+    # Save embeddings
     base_dir = os.path.dirname(output)
     emb_dir = os.path.join(base_dir, "embeddings")
     os.makedirs(emb_dir, exist_ok=True)

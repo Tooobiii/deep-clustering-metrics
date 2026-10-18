@@ -60,3 +60,70 @@ DATASET_POLICY = {
         "data_type": "text",
     },
 }
+
+INVERT_CVIS = [
+    "Davies-Bouldin",
+    "Davies-Bouldin starred",
+    "Ray-Turi",
+    "Kwon",
+    "Tang",
+
+    "DBCV",
+    "SD1",
+    "SD2",
+    "S_Dbw",
+    "Vsv1",
+    "Vsv2",
+
+    "C Index",
+    "McClain-Rao",
+
+    "BIC",
+    "Shannon entropy",
+    "ICL",
+
+    "Sym-Davies-Bouldin",
+    ]
+
+CVI = [
+    "Ball-Hall",
+    "Calinski-Harabasz",
+    "Davies-Bouldin",
+    "Davies-Bouldin starred",
+    "Hartigan",
+    "Kwon",
+    "Partition Separation",
+    "PBM",
+    "R-Squared",
+    "Ratkowsky-Lance",
+    "Ray-Turi",
+    "Score Function",
+    "Tang",
+    "Trace_W",
+    "Wemmert-Gancarski",
+    "Wemmert-Gancarski starred",
+    "Zalik SV",
+
+    "DBCV",
+    "SD1",
+    "SD2",
+    "S_Dbw",
+    "Vsv1",
+    "Vsv2",
+
+    "C Index",
+    "Dunn",
+    "McClain-Rao",
+    "Point Biserial",
+    "Silhouette",
+    "Shannon Entropy",
+    "BIC",
+    "ICL",
+
+    "Sym",
+    "Sym-Davies-Bouldin",
+    "Sym-Dunn",
+]
+
+META_COLS = ["dataset", "size", "model", "architecture", "n_clusters"]
+EXT_COLS = ["UCA", "NMI", "ARI"]

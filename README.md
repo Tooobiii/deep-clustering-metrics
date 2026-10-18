@@ -24,7 +24,7 @@ You can check the available arguments in the individual scripts and `args.py`.
 
 All programs are expected to be run from the root project folder.
 
-1. (Optional) **Create a subset of the Reuters dataset.**
+1. (Optional) **Create a subset of the Reuters dataset**
 
 `python utils/prep_reuter.py --subset_size <N>`
 

@@ -1,22 +1,19 @@
 from clustpy.data import (load_iris, load_mnist, load_fmnist, load_reuters, load_newsgroups, load_cifar10,
-                          load_cifar100, load_coil20, load_stl10, load_usps, load_pendigits)
+                          load_cifar100, load_coil20, load_stl10, load_usps)
 from clustpy.deep import DEC, DCN, IDEC, DKM
 
 DATASETS = {
     "iris": load_iris, # just for testing
-    "mnist": load_mnist, # image
-    "fmnist": load_fmnist, # image
-    "cifar10": load_cifar10,  # image
-    "cifar100": load_cifar100, # image
-    "coil20": load_coil20, # image
-    "stl10": load_stl10, # image
-    "usps": load_usps, # image
-    "reuters": load_reuters, # text
-    "newsgroups": load_newsgroups, # text
-    "pendigits": load_pendigits # other
+    "mnist": load_mnist,
+    "fmnist": load_fmnist,
+    "cifar10": load_cifar10,
+    "cifar100": load_cifar100,
+    "coil20": load_coil20,
+    "stl10": load_stl10,
+    "usps": load_usps,
+    "reuters": load_reuters,
+    "newsgroups": load_newsgroups,
 }
-
-TEXT_DATASETS = {"reuters", "newsgroups"}
 
 # Model args
 MODELS = {

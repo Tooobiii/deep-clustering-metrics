@@ -4,6 +4,7 @@ from functools import wraps
 import numpy as np
 from permetrics import ClusteringMetric # Dunn
 from pymfe.mfe import MFE
+from scipy.special import logsumexp
 from sklearn.metrics import pairwise_distances, silhouette_score
 from sklearn.neighbors import NearestNeighbors
 
@@ -59,7 +60,7 @@ class Metrics:
         }
 
         self.between_centroid_dist = pairwise_distances(self.centroids)
-        np.fill_diagonal(self.between_centroid_dist, np.inf) # Avoid zeros on the diagonal
+        np.fill_diagonal(self.between_centroid_dist, np.inf)
 
     def _centroids(self):
         """
@@ -535,7 +536,7 @@ class Distance(Metrics):
         self._iu = np.triu_indices(self.n, k=1)
         self.distances = self.D[self._iu]
 
-        self._precompute() # TODO Only compute when needed?
+        self._precompute()
 
         self.evaluator = ClusteringMetric()
 
@@ -596,57 +597,52 @@ class Distance(Metrics):
 class Information(Metrics):
     def __init__(self, embedding, pseudo_labels):
         super().__init__(embedding, pseudo_labels)
-        self._precompute_matrices()
 
     ### HELPING FUNCTIONS
-    def _precompute_matrices(self):
-        Xc = self.X - self.barycenter
-        self._T = Xc.T @ Xc
+    def _gaussian_mixture_log_probs(self):
+        sq_dist = np.column_stack([np.sum((self.X - self.centroids[k]) ** 2, axis=1)
+            for k in range(self.K)
+        ])
 
-        WGk = []
-        WG = np.zeros((self.p, self.p), dtype=np.float64)
-        for k, label in enumerate(self.labels):
-            Xk = self.X[self.y == label]
-            ck = self.centroids[k]
-            Xk_c = Xk - ck
-            Sk = Xk_c.T @ Xk_c
-            WGk.append(Sk)
-            WG += Sk
+        sse = sum(np.sum(sq_dist[self.y == label, k])
+            for k, label in enumerate(self.labels)
+        )
 
-        self._WGk = WGk
-        self._WG = WG
+        sigma2 = sse / (self.n * self.p)
 
-    def _logdet(self, A: np.ndarray) -> float:
-        return float(np.log(np.linalg.det(A)))
+        weights = self.cluster_sizes / self.n
 
-    ### METRICS ###
-    @metric("Cluster entropy")
-    @timed("Cluster entropy")
-    def cluster_entropy(self):
+        log_probs = (np.log(weights)[None, :]- 0.5 * self.p * np.log(2.0 * np.pi * sigma2)- sq_dist / (2.0 * sigma2))
+        return log_probs, sigma2
+
+    ### METRICS
+    @metric("Shannon Entropy")
+    @timed("Shannon Entropy")
+    def shannon_entropy(self):
         p = self.cluster_sizes / self.n
         return -np.sum(p * np.log(p + 1e-6))
 
-    @metric("Log Determinant Ratio")
-    @timed("Log Determinant Ratio")
-    def log_determinant_ratio(self):
-        return float(self.n * (self._logdet(self._T) - self._logdet(self._WG)))
+    @metric("Bayesian Information Criterion")
+    @timed("Bayesian Information Criterion")
+    def bic(self):
+        log_probs, _ = self._gaussian_mixture_log_probs()
+        log_likelihood = np.sum(logsumexp(log_probs, axis=1))
+        n_parameters = self.K * self.p + self.K
 
-    @metric("Negentropy Increment")
-    @timed("Negentropy Increment")
-    def negentropy_increment(self):
-        term_a = 0.0
-        for k, nk in enumerate(self.cluster_sizes):
-            cov_like = self._WGk[k] / float(nk - 1)
-            term_a += (nk / self.n) * self._logdet(cov_like)
-        term_a *= 0.5
+        return float(-2.0 * log_likelihood+ n_parameters * np.log(self.n))
 
-        term_b = -0.5 * self._logdet(self._T / float(self.n - 1))
+    @metric("Integrated Completed Likelihood")
+    @timed("Integrated Completed Likelihood")
+    def icl(self):
+        log_probs, _ = self._gaussian_mixture_log_probs()
 
-        p = self.cluster_sizes / self.n
-        p = p[p > 0]
-        term_c = -float(np.sum(p * np.log(p)))
+        log_norm = logsumexp(log_probs, axis=1, keepdims=True)
+        log_tau = log_probs - log_norm
+        tau = np.exp(log_tau)
 
-        return float(term_a + term_b + term_c)
+        entropy = -np.sum(tau * log_tau)
+
+        return float(self.bic() + 2.0 * entropy)
 
 
 class Symmetry(Metrics):
@@ -685,11 +681,11 @@ class Symmetry(Metrics):
 
             nn = NearestNeighbors(n_neighbors=2, algorithm="auto")
             nn.fit(Xk)
-            dists, _ = nn.kneighbors(Xk_star, return_distance=True)  # (nk, 2)
+            dists, _ = nn.kneighbors(Xk_star, return_distance=True)
 
             dsym = dists.mean(axis=1)  # Eq. (11)
-            r = self.within_centroid_dist[k].astype(np.float64)      # ||x_i - c_k||
-            dps = dsym * r                                           # Eq. (10)
+            r = self.within_centroid_dist[k].astype(np.float64)
+            dps = dsym * r
 
             dps_by_k[k] = dps
             sum_dps_by_k[k] = np.sum(dps)
@@ -707,10 +703,6 @@ class Symmetry(Metrics):
         return Dc
 
     def _min_intercluster_distance(self):
-        """
-        min_{k!=k'} min_{s in I_k, t in I_k'} ||x_s - x_t||
-        O(n^2) time/memory (full pairwise distances).
-        """
         if self._min_intercluster_dist is not None:
             return self._min_intercluster_dist
 
@@ -740,7 +732,6 @@ class Symmetry(Metrics):
     def sym_davies_bouldin(self):
         Dc = self._centroid_dist_matrix()
 
-        # average within-cluster point-symmetry distance per cluster
         avg_ps = np.empty(self.K, dtype=np.float64)
         for k, label in enumerate(self.labels):
             nk = np.sum(self.y == label)
@@ -752,8 +743,6 @@ class Symmetry(Metrics):
         if np.any(np.isnan(avg_ps)):
             return np.nan
 
-        # R_{k,k'} = (avg_ps[k] + avg_ps[k']) / ||c_k - c_k'||
-        # SymDB = (1/K) * sum_k max_{k'!=k} R_{k,k'}
         R = (avg_ps[:, None] + avg_ps[None, :]) / Dc
         np.fill_diagonal(R, -np.inf)
 

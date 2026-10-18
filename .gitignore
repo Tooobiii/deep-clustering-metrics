@@ -1,5 +1,4 @@
 venv/
-testenv/
 __pycache__/
 *.pyc
 subset_indices/
@@ -9,3 +8,4 @@ build/
 *.egg-info/
 results/*
 !results/*.py
+analysis/

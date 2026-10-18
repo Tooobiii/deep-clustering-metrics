@@ -2,13 +2,17 @@ import argparse
 
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
+from config_results import CVI, INVERT_CVIS, META_COLS, EXT_COLS
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-i", "--input", type=str, default=f"results.csv")
-    parser.add_argument("-o", "--output", type=str, default=f"results_prepped.csv")
-    parser.add_argument("-sd", "--calc-sd", type=bool, default=False)
+    parser.add_argument("-i", "--input", type=str, default=f"results/results.csv")
+    parser.add_argument("-o", "--output", type=str, default=f"results/")
+    parser.add_argument("-a", "--aggregate", action="store_false")
+    parser.add_argument("-sd", "--calc-sd", action="store_true")
 
     return parser.parse_args()
 
@@ -40,31 +44,7 @@ def replace_architecture_labels(df):
     return df
 
 def invert_metrics(df):
-    invert_metrics = [
-        "Davies-Bouldin",
-        "Davies-Bouldin starred",
-        "Ray-Turi",
-        "Kwon",
-        "Tang",
-
-        "DBCV",
-        "SD1",
-        "SD2",
-        "S_Dbw",
-        "Vsv1",
-        "Vsv2",
-
-        "C Index",
-        "McClain-Rao",
-
-        "BIC",
-        "Cluster entropy",
-        "ICL",
-
-        "Sym-Davies-Bouldin",
-    ]
-
-    existing = [c for c in invert_metrics if c in df.columns]
+    existing = [c for c in INVERT_CVIS if c in df.columns]
 
     if existing:
         df[existing] = df[existing].astype(float) * -1
@@ -98,10 +78,24 @@ def aggregate_results(df, calc_sd):
 
     return out[group_cols + ordered_cols]
 
+def split_results(df, output_dir):
+    shared_cols = [c for c in (META_COLS + EXT_COLS) if c in df.columns]
+
+    cvi_cols = [c for c in CVI if c in df.columns]
+    cvi_df = df[shared_cols + cvi_cols]
+
+    feature_cols = [c for c in df.columns if c not in shared_cols and c not in cvi_cols]
+    feature_df = df[shared_cols + feature_cols]
+
+    df.to_csv(output_dir / "results_combined.csv", index=False)
+    cvi_df.to_csv(output_dir / "results_cvi.csv", index=False)
+    feature_df.to_csv(output_dir / "results_feature.csv", index=False)
 
 def main():
     args = parse_arguments()
     df = pd.read_csv(args.input)
+    output_dir = Path(args.output)
+    output_dir.mkdir(exist_ok=True)
 
     df = drop_cols(df)
     df = normalize_datasets(df)
@@ -109,8 +103,9 @@ def main():
     df = invert_metrics(df)
     df = sort_results(df)
 
-    df = aggregate_results(df, args.calc_sd)
-    df.to_csv(args.output, index=False)
+    if args.aggregate:
+        df = aggregate_results(df, args.calc_sd)
+    split_results(df, output_dir)
 
 if __name__ == "__main__":
     main()
