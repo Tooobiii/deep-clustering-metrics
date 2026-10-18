@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from create_embeddings import symmetric_embedding
+from create_embedding import symmetric_embedding
 from expected import EXPECTED
-
 
 
 @pytest.mark.parametrize(

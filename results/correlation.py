@@ -1,19 +1,19 @@
+import argparse
+
 import pandas as pd
 from pathlib import Path
 
-from config import DATASET_POLICY
+from config_datasets import DATASET_POLICY
 
-### CONFIG
-ft_type = "cvi"  # or ft
+def parse_arguments():
+    parser = argparse.ArgumentParser()
 
-INPUT_CSV = f"results_prepped.csv"
-OUTPUT_DIR = Path(f"{ft_type}_results")
+    parser.add_argument("-i", "--input", type=str, default=f"results_prepped.csv")
+    parser.add_argument("-ft", "--type", type=str, default="cvi", choices=["cvi", "meta"])
+    parser.add_argument("-t", "--target", type=str, required=True, choices=["UCA", "NMI", "ARI"])
+    parser.add_argument("-c", "--calc-sd", type=bool, default=False)
 
-TARGET = "UCA"
-META_COLS = ["dataset", "size", "model", "architecture", "n_clusters"]
-EXTERNAL_COLS = ["UCA", "NMI", "ARI"]
-
-OUTPUT_DIR.mkdir(exist_ok=True)
+    return parser.parse_args()
 
 
 def compute_correlations(df, target, cols):
@@ -45,8 +45,19 @@ def compute_correlations(df, target, cols):
 
     return result
 
+### PREPARATIONS
+META_COLS = ["dataset", "size", "model", "architecture", "n_clusters"]
+EXTERNAL_COLS = ["UCA", "NMI", "ARI"]
+
+args = parse_arguments()
+
+input_csv = args.input
+output_dir = Path(f"{args.type}_results")
+
+output_dir.mkdir(exist_ok=True)
+
 ### LOAD DATA
-df = pd.read_csv(INPUT_CSV)
+df = pd.read_csv(input_csv)
 
 cols = [
     c for c in df.columns
@@ -54,32 +65,32 @@ cols = [
 ]
 
 ### GLOBAL CORRELATIONS
-global_results = compute_correlations(df, TARGET, cols)
-global_results.to_csv(OUTPUT_DIR / f"correlation_{ft_type}_global_aggregated.csv", index=False)
+global_results = compute_correlations(df, args.target, cols)
+global_results.to_csv(output_dir / f"correlation_{args.type}_global_aggregated.csv", index=False)
 
 ### DATASET CORRELATIONS
 for dataset, df_ds in df.groupby("dataset"):
-    if df_ds[TARGET].notna().sum() < 3:
+    if df_ds[args.target].notna().sum() < 3:
         continue  # too few points to correlate
 
-    res = compute_correlations(df_ds, TARGET, cols)
-    res.to_csv(OUTPUT_DIR / f"correlation_{ft_type}_data_{dataset}_aggregated.csv", index=False)
+    res = compute_correlations(df_ds, args.target, cols)
+    res.to_csv(output_dir / f"correlation_{args.type}_data_{dataset}_aggregated.csv", index=False)
 
 ### MODEL CORRELATIONS
 for model, df_m in df.groupby("model"):
-    if df_m[TARGET].notna().sum() < 3:
+    if df_m[args.target].notna().sum() < 3:
         continue
 
-    res = compute_correlations(df_m, TARGET, cols)
-    res.to_csv(OUTPUT_DIR / f"correlation_{ft_type}_model_{model}_aggregated.csv", index=False)
+    res = compute_correlations(df_m, args.target, cols)
+    res.to_csv(output_dir / f"correlation_{args.type}_model_{model}_aggregated.csv", index=False)
 
 ### ARCHITECTURE CORRELATIONS
 for arch, df_a in df.groupby("architecture"):
-    if df_a[TARGET].notna().sum() < 3:
+    if df_a[args.target].notna().sum() < 3:
         continue
 
-    res = compute_correlations(df_a, TARGET, cols)
-    res.to_csv(OUTPUT_DIR / f"correlation_{ft_type}_arch_{arch}_aggregated.csv", index=False)
+    res = compute_correlations(df_a, args.target, cols)
+    res.to_csv(output_dir / f"correlation_{args.type}_arch_{arch}_aggregated.csv", index=False)
 
 ### GROUPED ANALYSIS
 def add_dataset_groups(df, policy):
@@ -91,12 +102,12 @@ def add_dataset_groups(df, policy):
 
 def run_grouped_analysis(df, group_col, prefix):
     for group, df_g in df.groupby(group_col):
-        if df_g[TARGET].notna().sum() < 3:
+        if df_g[args.target].notna().sum() < 3:
             continue
 
-        res = compute_correlations(df_g, TARGET, cols)
+        res = compute_correlations(df_g, args.target, cols)
         res.to_csv(
-            OUTPUT_DIR / f"correlation_{ft_type}_{prefix}_{group}_aggregated.csv",
+            output_dir / f"correlation_{args.type}_{prefix}_{group}_aggregated.csv",
             index=False
         )
 

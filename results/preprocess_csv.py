@@ -1,10 +1,16 @@
+import argparse
+
 import numpy as np
 import pandas as pd
 
-INFILE = "results.csv"
-OUTFILE = "results_prepped.csv"
+def parse_arguments():
+    parser = argparse.ArgumentParser()
 
-CALC_SD = False
+    parser.add_argument("-i", "--input", type=str, default=f"results.csv")
+    parser.add_argument("-o", "--output", type=str, default=f"results_prepped.csv")
+    parser.add_argument("-sd", "--calc-sd", type=bool, default=False)
+
+    return parser.parse_args()
 
 def drop_cols(df):
     drop_cols = ["seed", "embedding_size", "clustering_epochs", "pretrain_epochs",
@@ -40,16 +46,22 @@ def invert_metrics(df):
         "Ray-Turi",
         "Kwon",
         "Tang",
+
+        "DBCV",
         "SD1",
         "SD2",
         "S_Dbw",
         "Vsv1",
         "Vsv2",
+
         "C Index",
         "McClain-Rao",
+
+        "BIC",
         "Cluster entropy",
+        "ICL",
+
         "Sym-Davies-Bouldin",
-        "Negentropy Increment",
     ]
 
     existing = [c for c in invert_metrics if c in df.columns]
@@ -88,7 +100,8 @@ def aggregate_results(df, calc_sd):
 
 
 def main():
-    df = pd.read_csv(INFILE)
+    args = parse_arguments()
+    df = pd.read_csv(args.input)
 
     df = drop_cols(df)
     df = normalize_datasets(df)
@@ -96,8 +109,8 @@ def main():
     df = invert_metrics(df)
     df = sort_results(df)
 
-    df = aggregate_results(df, CALC_SD)
-    df.to_csv(OUTFILE, index=False)
+    df = aggregate_results(df, args.calc_sd)
+    df.to_csv(args.output, index=False)
 
 if __name__ == "__main__":
     main()

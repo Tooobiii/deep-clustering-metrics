@@ -5,11 +5,9 @@ from utils.extract_metrics import Separation, Density, Distance, Information, Sy
 EXPECTED = [
     (Separation, {
         "ball_hall": 0.25,
-        #"banfield_raftery": -np.log(256),
         "calinski_harabasz": 18,
         "davies_bouldin": 1/3,
         "davies_bouldin_star": 1/3,
-        #"fukuyama_sugeno": -3.5,
         "hartigan": np.log(9),
         "kwon": 13 / 36,
         "partition_separation": 2 * (1 - np.exp(-4)),
@@ -18,10 +16,8 @@ EXPECTED = [
         "ray_turi": 1 / 36,
         "score_function": 0.845605,
         "tang": 10 / 9.5,
-        #"wch": 18,
         "wemmert_gancarski": 1 - 0.5 / np.sqrt(9.25),
         "wemmert_gancarski_star": 1 - 0.5 / np.sqrt(9.25),
-        #"xie_beni_star": 1 / 36,
         "zalik_sv": 6,
     }),
 
@@ -43,9 +39,9 @@ EXPECTED = [
     }),
 
     (Information, {
-        "cluster_entropy": np.log(2),
-        "log_determinant_ratio": np.inf,
-        "negentropy_increment": -np.inf,
+        "bic": np.log(2),
+        "icl": np.inf,
+        "shannon_entropy": -np.inf,
     }),
 
     (Symmetry, {
