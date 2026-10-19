@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Evaluation of internal clustering metrics for deep clustering architectures"
 requires-python = ">=3.10, <3.13"
 authors = [
-    { name="Tooobiii", email="TBA" }
+    { name="Tooobiii"}
 ]
 dependencies = [
     "clustpy==0.0.2",
